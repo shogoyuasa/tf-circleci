@@ -1,0 +1,139 @@
+version: 2
+
+anchors:
+  - &plan
+    docker:
+      - image: hashicorp/terraform:0.11.11
+    steps:
+      - checkout
+      - run:
+          name: plan
+          command: |
+            export AWS_ACCESS_KEY_ID=$(eval echo $AWS_ACCESS_KEY)
+            export AWS_SECRET_ACCESS_KEY=$(eval echo $AWS_SECRET_KEY)
+            terraform init -backend-config="bucket=$(eval echo $AWS_BUCKET_NAME)"
+            terraform workspace new ${WORKSPACE} 2>/dev/null || terraform workspace select ${WORKSPACE}
+            terraform workspace list
+            terraform plan
+
+  - &provisioning
+    docker:
+      - image: hashicorp/terraform:0.11.11
+    steps:
+      - checkout
+      - run:
+          name: provisioning
+          command: |
+            [[ "$CIRCLE_PULL_REQUEST" ]] && exit 0
+            export AWS_ACCESS_KEY_ID=$(eval echo $AWS_ACCESS_KEY)
+            export AWS_SECRET_ACCESS_KEY=$(eval echo $AWS_SECRET_KEY)
+            terraform init -backend-config="bucket=$(eval echo $AWS_BUCKET_NAME)"
+            terraform workspace new ${WORKSPACE} 2>/dev/null || terraform workspace select ${WORKSPACE}
+            terraform workspace list
+            terraform apply -auto-approve
+
+jobs:
+  plan_dev:
+    <<: *plan
+    environment:
+      WORKSPACE: dev
+      AWS_ACCESS_KEY: $AWS_STG_ACCESS_KEY
+      AWS_SECRET_KEY: $AWS_STG_SECRET_KEY
+      AWS_BUCKET_NAME: $AWS_DEV_BUCKET_NAME
+
+  plan_stg:
+    <<: *plan
+    environment:
+      WORKSPACE: stg
+      AWS_ACCESS_KEY: $AWS_STG_ACCESS_KEY
+      AWS_SECRET_KEY: $AWS_STG_SECRET_KEY
+      AWS_BUCKET_NAME: $AWS_STG_BUCKET_NAME
+
+  plan_prd:
+    <<: *plan
+    environment:
+      WORKSPACE: prd
+      AWS_ACCESS_KEY: $AWS_PRD_ACCESS_KEY
+      AWS_SECRET_KEY: $AWS_PRD_SECRET_KEY
+      AWS_BUCKET_NAME: $AWS_PRD_BUCKET_NAME
+
+  provisioning_dev:
+    <<: *provisioning
+    environment:
+      WORKSPACE: dev
+      AWS_ACCESS_KEY: $AWS_STG_ACCESS_KEY
+      AWS_SECRET_KEY: $AWS_STG_SECRET_KEY
+      AWS_BUCKET_NAME: $AWS_DEV_BUCKET_NAME
+
+  provisioning_stg:
+    <<: *provisioning
+    environment:
+      WORKSPACE: stg
+      AWS_ACCESS_KEY: $AWS_STG_ACCESS_KEY
+      AWS_SECRET_KEY: $AWS_STG_SECRET_KEY
+      AWS_BUCKET_NAME: $AWS_STG_BUCKET_NAME
+
+  provisioning_prd:
+    <<: *provisioning
+    environment:
+      WORKSPACE: prd
+      AWS_ACCESS_KEY: $AWS_PRD_ACCESS_KEY
+      AWS_SECRET_KEY: $AWS_PRD_SECRET_KEY
+      AWS_BUCKET_NAME: $AWS_PRD_BUCKET_NAME
+
+workflows:
+  version: 2
+  plan_dev:
+    jobs:
+      - plan_dev:
+          filters:
+            branches:
+              ignore:
+                - develop
+                - master
+
+  provisioning_dev:
+    jobs:
+      - plan_dev:
+          filters:
+            branches:
+              only:
+                - develop
+      - provisioning_dev:
+          requires:
+            - plan_dev
+
+  plan_stg:
+    jobs:
+      - plan_stg:
+          filters:
+            branches:
+              ignore:
+                - develop
+                - master
+
+  provisioning_stg:
+    jobs:
+      - plan_stg:
+          filters:
+            branches:
+              only:
+                - develop
+      - provisioning_stg:
+          requires:
+            - plan_stg
+
+  provisioning_prd:
+    jobs:
+      - plan_prd:
+          filters:
+            branches:
+              only:
+                - develop
+      - approve:
+          requires:
+            - plan_prd
+          type: approval
+      - provisioning_prd:
+          requires:
+            - approve
