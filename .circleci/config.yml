@@ -1,8 +1,4 @@
-version: 2.1
-
-orbs:
-  aws-ecr: circleci/aws-ecr@0.0.2
-  aws-ecs: circleci/aws-ecs@0.0.3
+version: 2
 
 anchors:
   - &plan
@@ -69,24 +65,18 @@ jobs:
 
 workflows:
   version: 2
-  docker_build:
-    jobs:
-      - docker_build
   plan_stg:
     jobs:
       - plan_stg:
-          requires:
-            - docker_build
           filters:
             branches:
               ignore:
                 - develop
                 - master
+
   provisioning_stg:
     jobs:
       - plan_stg:
-          requires:
-            - docker_build
           filters:
             branches:
               only:
@@ -94,11 +84,10 @@ workflows:
       - provisioning_stg:
           requires:
             - plan_stg
+
   provisioning_prd:
     jobs:
       - plan_prd:
-          requires:
-            - docker_build
           filters:
             branches:
               only:
