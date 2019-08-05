@@ -91,7 +91,7 @@ workflows:
       - provisioning_stg:
           requires:
             - plan_stg
-            - build-and-deploy
+#            - build-and-deploy
 
   provisioning_prd:
     jobs:
