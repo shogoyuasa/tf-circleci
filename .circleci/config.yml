@@ -1,4 +1,8 @@
-version: 2
+version: 2.1
+
+orbs:
+  aws-ecr: circleci/aws-ecr@0.0.2
+  aws-ecs: circleci/aws-ecs@0.0.3
 
 anchors:
   - &plan
@@ -31,6 +35,11 @@ anchors:
             terraform workspace list
             terraform apply -auto-approve
 jobs:
+  aws-ecr/build_and_push_image:
+    account-url: "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com"
+    repo: $AWS_RESOURCE_NAME_PREFIX
+    region: $AWS_DEFAULT_REGION
+    tag: latest
   plan_stg:
     <<: *plan
     environment:
@@ -65,18 +74,24 @@ jobs:
 
 workflows:
   version: 2
+  docker_build:
+    jobs:
+      - docker_build
   plan_stg:
     jobs:
       - plan_stg:
+          requires:
+            - docker_build
           filters:
             branches:
               ignore:
                 - develop
                 - master
-
   provisioning_stg:
     jobs:
       - plan_stg:
+          requires:
+            - docker_build
           filters:
             branches:
               only:
@@ -84,10 +99,11 @@ workflows:
       - provisioning_stg:
           requires:
             - plan_stg
-
   provisioning_prd:
     jobs:
       - plan_prd:
+          requires:
+            - docker_build
           filters:
             branches:
               only:
